@@ -12,8 +12,3 @@ entry_points:
       - name: experiment_name
         description: "MLflow experiment name"
         default: "svc_tuning_production"
-
-docker_env:
-  image: python:3.10
-  volumes:
-    - /mlflow/artifacts:/mlflow/artifacts
