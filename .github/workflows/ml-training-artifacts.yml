@@ -32,13 +32,18 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r MLProject/conda_requirements.txt
 
-      - name: Run MLflow Project
-        working-directory: MLProject
+      - name: Verify MLflow installation
         run: |
-          mlflow run . \
-            --env-manager=virtualenv \
-            -P data_path="sentiment_analysis_preprocessing" \
-            -P experiment_name="svc_tuning_production"
+          python -c "import mlflow; print(f'MLflow version: {mlflow.__version__}')"
+          python -c "import sklearn; print(f'scikit-learn version: {sklearn.__version__}')"
+
+      - name: Run training script directly
+        working-directory: MLProject
+        env:
+          DATA_PATH: sentiment_analysis_preprocessing
+          EXPERIMENT_NAME: svc_tuning_production
+        run: |
+          python modelling.py
 
       - name: Prepare artifacts
         run: |
