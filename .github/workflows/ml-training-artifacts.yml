@@ -47,8 +47,13 @@ jobs:
       - name: Prepare artifacts
         run: |
           mkdir -p artifacts_export
-          if [ -d "mlruns" ]; then
-            cp -r mlruns artifacts_export/
+          # Copy mlruns from MLProject directory
+          if [ -d "MLProject/mlruns" ]; then
+            cp -r MLProject/mlruns artifacts_export/
+            echo "Copied mlruns directory"
+          else
+            echo "Warning: mlruns directory not found in MLProject/"
+            ls -la MLProject/
           fi
           cat > artifacts_export/TRAINING_METADATA.txt << EOF
           Training Timestamp: $(date -u +'%Y-%m-%dT%H:%M:%SZ')
@@ -67,7 +72,7 @@ jobs:
 
       - name: Create workflow summary
         run: |
-          echo "## ✅ Model Training Completed" >> $GITHUB_STEP_SUMMARY
+          echo "##Model Training Completed" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Training Details" >> $GITHUB_STEP_SUMMARY
           echo "- **Run ID**: ${{ github.run_id }}" >> $GITHUB_STEP_SUMMARY
@@ -76,5 +81,5 @@ jobs:
           echo "- **Timestamp**: $(date -u +'%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Artifacts" >> $GITHUB_STEP_SUMMARY
-          echo "📦 MLflow models and metrics (90 days retention)" >> $GITHUB_STEP_SUMMARY
+          echo "MLflow models and metrics (90 days retention)" >> $GITHUB_STEP_SUMMARY
 
