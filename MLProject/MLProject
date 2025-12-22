@@ -1,0 +1,19 @@
+name: sentiment-analysis-ml
+
+conda_env: conda.yaml
+
+entry_points:
+  main:
+    command: "python modelling.py"
+    parameters:
+      - name: data_path
+        description: "Path to the dataset folder containing train_data.csv and test_data.csv"
+        default: "sentiment_analysis_preprocessing"
+      - name: experiment_name
+        description: "MLflow experiment name"
+        default: "svc_tuning_production"
+
+docker_env:
+  image: python:3.10
+  volumes:
+    - /mlflow/artifacts:/mlflow/artifacts

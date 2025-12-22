@@ -1,0 +1,194 @@
+name: MLflow Training with Artifact Upload
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'MLProject/**'
+      - '.github/workflows/ml-training-artifacts.yml'
+  workflow_dispatch:
+    inputs:
+      experiment_name:
+        description: 'MLflow Experiment Name'
+        required: false
+        default: 'svc_tuning_production'
+      upload_artifacts:
+        description: 'Upload artifacts to repository releases'
+        required: false
+        default: 'true'
+
+permissions:
+  contents: write
+  id-token: write
+
+jobs:
+  train-and-store:
+    runs-on: ubuntu-latest
+    name: Train Model & Store Artifacts
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r MLProject/conda_requirements.txt
+          pip install gitpython
+
+      - name: Create mlruns directory
+        run: mkdir -p mlruns
+
+      - name: Run MLflow Project
+        working-directory: MLProject
+        run: |
+          mlflow run . \
+            --env-manager=virtualenv \
+            -P data_path="sentiment_analysis_preprocessing" \
+            -P experiment_name="${{ github.event.inputs.experiment_name || 'svc_tuning_production' }}"
+
+      - name: Prepare artifacts for upload
+        run: |
+          mkdir -p artifacts_export
+          # Copy all mlruns to export directory
+          if [ -d "mlruns" ]; then
+            cp -r mlruns artifacts_export/
+          fi
+          # Create metadata file
+          cat > artifacts_export/TRAINING_METADATA.txt << EOF
+          Training Timestamp: $(date -u +'%Y-%m-%dT%H:%M:%SZ')
+          Commit SHA: ${{ github.sha }}
+          Commit Message: ${{ github.event.head_commit.message }}
+          Branch: ${{ github.ref_name }}
+          Repository: ${{ github.repository }}
+          Workflow Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          EOF
+
+      - name: Upload artifacts as GitHub artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: mlflow-training-artifacts
+          path: artifacts_export/
+          retention-days: 90
+
+      - name: Create release with artifacts (on main)
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: model-${{ github.run_number }}-${{ github.run_id }}
+          release_name: Model Training Run #${{ github.run_number }}
+          body: |
+            ## Sentiment Analysis Model Training
+            
+            **Training Information:**
+            - Run Number: ${{ github.run_number }}
+            - Timestamp: ${{ github.event.head_commit.timestamp }}
+            - Commit: ${{ github.sha }}
+            - Author: ${{ github.actor }}
+            
+            **Artifacts:**
+            - MLflow runs with model and metrics
+            - Confusion matrix visualization
+            - Model parameters and performance metrics
+            
+            **Access Training Details:**
+            View detailed metrics in the GitHub Actions artifacts or by downloading MLflow artifacts.
+          draft: false
+          prerelease: false
+
+      - name: Archive artifacts
+        run: |
+          cd artifacts_export
+          tar -czf ../mlflow-artifacts-${{ github.run_number }}.tar.gz .
+          ls -lh ../mlflow-artifacts-${{ github.run_number }}.tar.gz
+
+      - name: Upload to Release Assets (if manual trigger)
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./mlflow-artifacts-${{ github.run_number }}.tar.gz
+          asset_name: mlflow-artifacts-${{ github.run_number }}.tar.gz
+          asset_content_type: application/gzip
+        continue-on-error: true
+
+      - name: Generate training report
+        run: |
+          cat > training_report.md << 'EOF'
+          # Model Training Report
+          
+          **Workflow:** MLflow Training with Artifact Upload
+          **Run:** ${{ github.run_number }}
+          **Date:** $(date -u +'%Y-%m-%d %H:%M:%S UTC')
+          
+          ## Summary
+          
+          Training job completed successfully. Model artifacts have been generated and stored.
+          
+          ## Artifact Locations
+          
+          1. **GitHub Artifacts**: Available in workflow run page for 90 days
+          2. **GitHub Releases**: Tagged releases for easy reference
+          3. **Repository**: Stored in `.gitignore` excluded mlruns directory
+          
+          ## Next Steps
+          
+          - Download artifacts from GitHub Actions page
+          - Evaluate model performance metrics
+          - Deploy trained model to production
+          - Monitor model performance in MLflow UI
+          
+          ## Quick Links
+          
+          - [Workflow Run](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})
+          - [Artifacts](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}/attempts/1)
+          EOF
+          cat training_report.md
+
+      - name: Upload report
+        uses: actions/upload-artifact@v3
+        with:
+          name: training-report
+          path: training_report.md
+
+      - name: Create detailed summary
+        run: |
+          echo "## ✅ Model Training Completed Successfully" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Training Details" >> $GITHUB_STEP_SUMMARY
+          echo "- **Run ID**: ${{ github.run_id }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Run Number**: ${{ github.run_number }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Timestamp**: $(date -u +'%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_STEP_SUMMARY
+          echo "- **Branch**: ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Commit**: [\`${{ github.sha }}\`](https://github.com/${{ github.repository }}/commit/${{ github.sha }})" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Artifact Storage" >> $GITHUB_STEP_SUMMARY
+          echo "📦 **GitHub Actions Artifacts** (90 days retention)" >> $GITHUB_STEP_SUMMARY
+          echo "🏷️ **GitHub Releases** (permanent storage)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Model Artifacts Included" >> $GITHUB_STEP_SUMMARY
+          echo "- Trained LinearSVC model" >> $GITHUB_STEP_SUMMARY
+          echo "- Confusion matrix visualization" >> $GITHUB_STEP_SUMMARY
+          echo "- Performance metrics (accuracy, F1, precision, recall)" >> $GITHUB_STEP_SUMMARY
+          echo "- Hyperparameter configuration" >> $GITHUB_STEP_SUMMARY
+
+      - name: Validate artifacts
+        run: |
+          echo "Checking artifacts structure..."
+          find artifacts_export -type f -name "*.pkl" -o -name "*.png" | head -20 || true
+          echo ""
+          echo "Total files in artifacts_export:"
+          find artifacts_export -type f | wc -l

@@ -1,0 +1,79 @@
+name: MLflow Model Training Pipeline
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'MLProject/**'
+      - '.github/workflows/ml-training.yml'
+  workflow_dispatch:
+    inputs:
+      experiment_name:
+        description: 'MLflow Experiment Name'
+        required: false
+        default: 'svc_tuning_production'
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  train-model:
+    runs-on: ubuntu-latest
+    name: Train ML Model
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+          cache: 'pip'
+
+      - name: Install MLflow and dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install mlflow==3.8.0
+          pip install -r MLProject/conda_requirements.txt
+
+      - name: Create mlruns directory
+        run: mkdir -p mlruns
+
+      - name: Run MLflow Project
+        run: |
+          cd MLProject
+          mlflow run . \
+            --env-manager=virtualenv \
+            -P data_path="sentiment_analysis_preprocessing" \
+            -P experiment_name="${{ github.event.inputs.experiment_name || 'svc_tuning_production' }}"
+
+      - name: Upload MLflow artifacts to GitHub
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: mlflow-artifacts
+          path: mlruns/
+          retention-days: 30
+
+      - name: Create training summary
+        if: always()
+        run: |
+          echo "## Model Training Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Timestamp**: $(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> $GITHUB_STEP_SUMMARY
+          echo "**Branch**: ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Commit**: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Artifacts Location" >> $GITHUB_STEP_SUMMARY
+          echo "MLflow runs are stored in the \`mlruns/\` directory and uploaded as workflow artifacts." >> $GITHUB_STEP_SUMMARY
+
+      - name: Validate model artifacts
+        run: |
+          if [ -d "mlruns" ] && [ "$(find mlruns -name 'model' -type d | wc -l)" -gt 0 ]; then
+            echo "✅ Model artifacts successfully generated"
+          else
+            echo "⚠️ Warning: Model artifacts may not have been generated"
+          fi
