@@ -142,16 +142,13 @@ def run(data_path: str = "sentiment_analysis_preprocessing",
             print(f"Warning: Could not generate confusion matrix: {e}")
 
         # Print summary
-        print("\n" + "="*60)
         print("TRAINING COMPLETE")
-        print("="*60)
         print(f"Best parameters: {grid.best_params_}")
         print(f"Best CV F1 (macro): {grid.best_score_:.4f}")
         print(f"Test Accuracy: {test_acc:.4f}")
         print(f"Test F1 (macro): {test_f1:.4f}")
         print(f"Test Precision (macro): {test_precision:.4f}")
         print(f"Test Recall (macro): {test_recall:.4f}")
-        print("="*60)
 
 
 if __name__ == "__main__":
