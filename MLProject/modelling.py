@@ -69,8 +69,9 @@ def run(data_path: str = "sentiment_analysis_preprocessing",
         data_path: Path to the dataset folder
         experiment_name: Name of the MLflow experiment
     """
-    # Set experiment (MLflow will respect this when running via mlflow run)
-    mlflow.set_experiment(experiment_name)
+    # Only set experiment if not running via mlflow run (which sets MLFLOW_RUN_ID)
+    if "MLFLOW_RUN_ID" not in os.environ:
+        mlflow.set_experiment(experiment_name)
     
     # Load datasets
     X_train, X_test, y_train, y_test = load_datasets(data_path)
