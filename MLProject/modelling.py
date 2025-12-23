@@ -69,8 +69,10 @@ def run(data_path: str = "sentiment_analysis_preprocessing",
         data_path: Path to the dataset folder
         experiment_name: Name of the MLflow experiment
     """
-    # Setup MLflow
-    mlflow.set_experiment(experiment_name)
+    # Setup MLflow only if not already in a run context (i.e., not run via mlflow run)
+    active_run = mlflow.active_run()
+    if active_run is None:
+        mlflow.set_experiment(experiment_name)
     
     # Load datasets
     X_train, X_test, y_train, y_test = load_datasets(data_path)
@@ -94,7 +96,8 @@ def run(data_path: str = "sentiment_analysis_preprocessing",
         verbose=1,
     )
 
-    with mlflow.start_run(run_name="svc_tuning_production"):
+    # Use existing run context if available (from mlflow run), otherwise create new run
+    def train_model():
         print("Starting model training with hyperparameter tuning...")
         grid.fit(X_train, y_train)
         best_model = grid.best_estimator_
@@ -149,6 +152,15 @@ def run(data_path: str = "sentiment_analysis_preprocessing",
         print(f"Test F1 (macro): {test_f1:.4f}")
         print(f"Test Precision (macro): {test_precision:.4f}")
         print(f"Test Recall (macro): {test_recall:.4f}")
+    
+    # Execute training in appropriate context
+    if active_run:
+        # Already in a run context (from mlflow run)
+        train_model()
+    else:
+        # Not in a run context, create one
+        with mlflow.start_run(run_name="svc_tuning_production"):
+            train_model()
 
 
 if __name__ == "__main__":
