@@ -69,10 +69,8 @@ def run(data_path: str = "sentiment_analysis_preprocessing",
         data_path: Path to the dataset folder
         experiment_name: Name of the MLflow experiment
     """
-    # Setup MLflow only if not already in a run context (i.e., not run via mlflow run)
-    active_run = mlflow.active_run()
-    if active_run is None:
-        mlflow.set_experiment(experiment_name)
+    # Set experiment (MLflow will respect this when running via mlflow run)
+    mlflow.set_experiment(experiment_name)
     
     # Load datasets
     X_train, X_test, y_train, y_test = load_datasets(data_path)
@@ -96,71 +94,60 @@ def run(data_path: str = "sentiment_analysis_preprocessing",
         verbose=1,
     )
 
-    # Use existing run context if available (from mlflow run), otherwise create new run
-    def train_model():
-        print("Starting model training with hyperparameter tuning...")
-        grid.fit(X_train, y_train)
-        best_model = grid.best_estimator_
+    print("Starting model training with hyperparameter tuning...")
+    grid.fit(X_train, y_train)
+    best_model = grid.best_estimator_
 
-        # Log hyperparameters
-        mlflow.log_params({f"best_{k}": v for k, v in grid.best_params_.items()})
-        mlflow.log_param("n_features", X_train.shape[1])
-        mlflow.log_param("model_type", "LinearSVC")
-        mlflow.log_param("cv_splits", 3)
-        
-        # Log cross-validation score
-        mlflow.log_metric("cv_best_f1_macro", grid.best_score_)
-
-        # Evaluate on test set
-        predictions = best_model.predict(X_test)
-        test_acc = accuracy_score(y_test, predictions)
-        test_f1 = f1_score(y_test, predictions, average="macro")
-        test_precision = precision_score(y_test, predictions, average="macro")
-        test_recall = recall_score(y_test, predictions, average="macro")
-        
-        # Log test metrics
-        mlflow.log_metric("test_accuracy", test_acc)
-        mlflow.log_metric("test_f1_macro", test_f1)
-        mlflow.log_metric("test_precision_macro", test_precision)
-        mlflow.log_metric("test_recall_macro", test_recall)
-
-        # Log the trained model
-        mlflow.sklearn.log_model(best_model, artifact_path="model")
-
-        # Generate and log confusion matrix
-        try:
-            fig, ax = plt.subplots(figsize=(6, 5))
-            ConfusionMatrixDisplay.from_predictions(
-                y_test,
-                predictions,
-                ax=ax,
-                cmap="Blues",
-                colorbar=False,
-            )
-            ax.set_title("Confusion Matrix (Test) - LinearSVC")
-            fig.tight_layout()
-            mlflow.log_figure(fig, "confusion_matrix.png")
-            plt.close(fig)
-        except Exception as e:
-            print(f"Warning: Could not generate confusion matrix: {e}")
-
-        # Print summary
-        print("TRAINING COMPLETE")
-        print(f"Best parameters: {grid.best_params_}")
-        print(f"Best CV F1 (macro): {grid.best_score_:.4f}")
-        print(f"Test Accuracy: {test_acc:.4f}")
-        print(f"Test F1 (macro): {test_f1:.4f}")
-        print(f"Test Precision (macro): {test_precision:.4f}")
-        print(f"Test Recall (macro): {test_recall:.4f}")
+    # Log hyperparameters
+    mlflow.log_params({f"best_{k}": v for k, v in grid.best_params_.items()})
+    mlflow.log_param("n_features", X_train.shape[1])
+    mlflow.log_param("model_type", "LinearSVC")
+    mlflow.log_param("cv_splits", 3)
     
-    # Execute training in appropriate context
-    if active_run:
-        # Already in a run context (from mlflow run)
-        train_model()
-    else:
-        # Not in a run context, create one
-        with mlflow.start_run(run_name="svc_tuning_production"):
-            train_model()
+    # Log cross-validation score
+    mlflow.log_metric("cv_best_f1_macro", grid.best_score_)
+
+    # Evaluate on test set
+    predictions = best_model.predict(X_test)
+    test_acc = accuracy_score(y_test, predictions)
+    test_f1 = f1_score(y_test, predictions, average="macro")
+    test_precision = precision_score(y_test, predictions, average="macro")
+    test_recall = recall_score(y_test, predictions, average="macro")
+    
+    # Log test metrics
+    mlflow.log_metric("test_accuracy", test_acc)
+    mlflow.log_metric("test_f1_macro", test_f1)
+    mlflow.log_metric("test_precision_macro", test_precision)
+    mlflow.log_metric("test_recall_macro", test_recall)
+
+    # Log the trained model
+    mlflow.sklearn.log_model(best_model, artifact_path="model")
+
+    # Generate and log confusion matrix
+    try:
+        fig, ax = plt.subplots(figsize=(6, 5))
+        ConfusionMatrixDisplay.from_predictions(
+            y_test,
+            predictions,
+            ax=ax,
+            cmap="Blues",
+            colorbar=False,
+        )
+        ax.set_title("Confusion Matrix (Test) - LinearSVC")
+        fig.tight_layout()
+        mlflow.log_figure(fig, "confusion_matrix.png")
+        plt.close(fig)
+    except Exception as e:
+        print(f"Warning: Could not generate confusion matrix: {e}")
+
+    # Print summary
+    print("TRAINING COMPLETE")
+    print(f"Best parameters: {grid.best_params_}")
+    print(f"Best CV F1 (macro): {grid.best_score_:.4f}")
+    print(f"Test Accuracy: {test_acc:.4f}")
+    print(f"Test F1 (macro): {test_f1:.4f}")
+    print(f"Test Precision (macro): {test_precision:.4f}")
+    print(f"Test Recall (macro): {test_recall:.4f}")
 
 
 if __name__ == "__main__":
