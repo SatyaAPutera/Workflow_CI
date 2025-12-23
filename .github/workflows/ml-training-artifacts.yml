@@ -42,7 +42,7 @@ jobs:
           DATA_PATH: sentiment_analysis_preprocessing
           EXPERIMENT_NAME: svc_tuning_production
         run: |
-          python modelling.py
+          mlflow run
 
       - name: Prepare artifacts
         run: |
